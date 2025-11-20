@@ -7,16 +7,19 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method Not Allowed" });
   }
 
-  const { product_id, product_title, product_price, product_image } = req.body;
-
   try {
+    const { product_id, product_title, product_price, product_image } = req.body;
+
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
       mode: "payment",
+
+      // ENABLE P24 + BLIK + CARD
+      payment_method_types: ["card", "p24", "blik"],
+
       line_items: [
         {
           price_data: {
-            currency: "usd",
+            currency: "pln",
             unit_amount: Math.round(product_price * 100),
             product_data: {
               name: product_title,
@@ -27,12 +30,15 @@ export default async function handler(req, res) {
           quantity: 1
         }
       ],
+
       success_url: "https://lavorabutik.com/pages/thank-you",
       cancel_url: "https://lavorabutik.com/cart"
     });
 
     return res.status(200).json({ url: session.url });
+
   } catch (error) {
+    console.error("Stripe error:", error);
     return res.status(400).json({ error: error.message });
   }
 }
