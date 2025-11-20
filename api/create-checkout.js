@@ -1,5 +1,6 @@
 // /api/create-checkout.js
 import Stripe from "stripe";
+import { URL } from "url";
 
 export const config = {
   api: {
@@ -8,34 +9,49 @@ export const config = {
 };
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const FRONTEND_URL = process.env.FRONTEND_URL || "*"; // set FRONTEND_URL to https://lavorabutik.com in Vercel for security
+const FRONTEND_URL = process.env.FRONTEND_URL || "*";
+
+function safeHttpsUrl(maybeUrl) {
+  if (!maybeUrl) return null;
+  // convert protocol-relative //host/... => https://host/...
+  let s = String(maybeUrl).trim();
+  if (s.startsWith("//")) s = "https:" + s;
+  // allow only https URLs
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "https:") return null;
+    return u.toString();
+  } catch (e) {
+    return null;
+  }
+}
 
 export default async function handler(req, res) {
-  // CORS headers
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", FRONTEND_URL);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    // respond to preflight
-    return res.status(204).end();
-  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method Not Allowed" });
-  }
-
-  // Basic checks
   try {
     const { product_id, product_title, product_price, product_image } = req.body || {};
 
-    console.log("Incoming create-checkout request:", { product_id, product_title, product_price });
+    console.log("Incoming create-checkout request:", { product_id, product_title, product_price, product_image });
 
     if (!product_id || !product_title || typeof product_price === "undefined") {
-      return res.status(400).json({ error: "Missing product_id/product_title/product_price" });
+      return res.status(400).json({ error: "Missing product_id / product_title / product_price" });
     }
 
-    const amount = Math.round(Number(product_price) * 100); // cents
+    const amount = Math.round(Number(product_price) * 100);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ error: "Invalid product_price" });
+    }
+
+    // sanitize image
+    const cleanImage = safeHttpsUrl(product_image);
+    const imagesArray = cleanImage ? [cleanImage] : []; // if invalid or missing, send empty
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -47,7 +63,7 @@ export default async function handler(req, res) {
             unit_amount: amount,
             product_data: {
               name: product_title,
-              images: product_image ? [product_image] : [],
+              images: imagesArray,
               metadata: { shopify_product_id: product_id },
             },
           },
@@ -62,6 +78,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: session.url });
   } catch (err) {
     console.error("Stripe error:", err);
-    return res.status(500).json({ error: err.message || "Server error" });
+    // try to return the underlying Stripe message if present
+    const message = err?.message || "Server error";
+    return res.status(500).json({ error: message });
   }
 }
