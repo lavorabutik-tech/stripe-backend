@@ -1,5 +1,11 @@
 import Stripe from "stripe";
 
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export default async function handler(req, res) {
@@ -9,6 +15,10 @@ export default async function handler(req, res) {
 
   try {
     const { product_id, product_title, product_price, product_image } = req.body;
+
+    if (!product_id || !product_title || !product_price) {
+      return res.status(400).json({ error: "Missing product data" });
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
