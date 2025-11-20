@@ -55,7 +55,7 @@ export default async function handler(req, res) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card", "p24", "blik"],
+      payment_method_types: ["card", "p24"],
       line_items: [
         {
           price_data: {
@@ -83,3 +83,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: message });
   }
 }
+
