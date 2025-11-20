@@ -4,6 +4,6 @@
   "description": "Stripe Checkout backend for Shopify",
   "type": "module",
   "dependencies": {
-    "stripe": "^12.0.0"
+    "stripe": "latest"
   }
 }
